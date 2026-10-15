@@ -13,7 +13,7 @@ shopt -s nullglob
 # <title>_batch1, <title>_batch2 ...，再由 merge_all_v2.py 合并为 <title>。
 
 PYTHON_BIN="python"
-MERGE_SCRIPT="/home/LAB/lab_ab_1/pipeline/merge_all_v3.py"
+MERGE_SCRIPT="/home/LAB/lab_ab_1/pipeline/utilities/merge_all_v3.py"
 ISEQ_OPTS=(-g)
 
 log()  { echo "[$(date '+%F %T')] [INFO] $*"; }
