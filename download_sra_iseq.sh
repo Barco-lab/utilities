@@ -10,7 +10,7 @@ shopt -s nullglob
 #   SRR22796946    PRJNA912643      ATAC-seq          Brain-endothelial_O_1
 #
 # 同一 sample_title 对应多个 run（如 Neurons_O_3）时，按出现顺序改名为
-# <title>_batch1, <title>_batch2 ...，再由 merge_all_v2.py 合并为 <title>。
+# <title>_batch1, <title>_batch2 ...，再由 merge_all_v3.py 合并为 <title>。
 
 PYTHON_BIN="python"
 MERGE_SCRIPT="/home/LAB/lab_ab_1/pipeline/utilities/merge_all_v3.py"
@@ -236,13 +236,14 @@ if [ ${#batch_files[@]} -gt 0 ]; then
     log "Moving ${#batch_files[@]} batch file(s) to unmerged/ ..."
     mv -- "${batch_files[@]}" unmerged/
 
-    log "Running merge_all_v2.py ..."
+    log "Running $(basename "$MERGE_SCRIPT") ..."
     "$PYTHON_BIN" "$MERGE_SCRIPT" \
         --type filename-based \
         -i unmerged/ \
         -o ./ \
-        --remove-pattern '_batch[0-9]' \
-        || die "merge_all_v2.py failed."
+        --suffix .fastq.gz \
+        --remove-pattern '_batch[0-9]+' \
+        || die "$(basename "$MERGE_SCRIPT") failed."
     log "Merging done."
 else
     log "No *_batch* files, skip merging."

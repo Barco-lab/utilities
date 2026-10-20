@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# eg: python merge_all_v2.py --type filename-based -i ../rawdata/unmerged -o ./ --suffix .qc_for_fastq_gz.sh --remove-pattern="_batch[0-9]"
+# eg: python merge_all_v3.py --type filename-based -i ../rawdata/unmerged -o ./ --suffix .fastq.gz --remove-pattern="_batch[0-9]+"
 
 import argparse
 import os
@@ -34,8 +34,8 @@ def parse_args():
     parser.add_argument("--remove-pattern",
                         help="String or regex to remove from filenames (filename-based only eg: _rep[0-9])")
     parser.add_argument("-n", "--dry-run", action="store_true", help="Dry run: print commands without executing")
-    parser.add_argument("--skip-lines", action="store_true",default=True,
-                        help="Skip line counting (useful for huge files to save time)")
+    parser.add_argument("--check-lines", action="store_true",
+                        help="Also validate line counts after merging (slow for huge files)")
     return parser.parse_args()
 
 
@@ -92,6 +92,7 @@ def merge_files(input_files, output_file, dry_run=False, skip_lines=False):
 
     if after_size != total_before_size:
         logging.error(f"× Size mismatch! Expected {format_size(total_before_size)} but got {format_size(after_size)}")
+        sys.exit(1)
     else:
         logging.info("√ File size strictly matches (Output == sum of Inputs)!")
     logging.info("-" * 50)
@@ -154,6 +155,10 @@ def run_filename_based(input_dir, output_dir, suffix, remove_pattern, dry_run, s
             key = re.sub(remove_pattern, "", name)
         groups[key].append(file)
 
+    if not groups:
+        logging.error(f"No files matching *{suffix} in {input_dir}")
+        sys.exit(1)
+
     for key, files in groups.items():
         if len(files) == 1:
             logging.info(f"Only 1 file found for {key}, skipping merge.")
@@ -169,11 +174,12 @@ def main():
 
     logging.info("============= ^.^ Start merge process =============")
     logging.info(f"Mode: {args.type}, Suffix: {args.suffix}")
+    skip_lines = not args.check_lines
 
     if args.type == "dir-based":
-        run_dir_based(args.input, args.output, args.r1_id, args.r2_id, args.suffix, args.dry_run, args.skip_lines)
+        run_dir_based(args.input, args.output, args.r1_id, args.r2_id, args.suffix, args.dry_run, skip_lines)
     elif args.type == "filename-based":
-        run_filename_based(args.input, args.output, args.suffix, args.remove_pattern, args.dry_run, args.skip_lines)
+        run_filename_based(args.input, args.output, args.suffix, args.remove_pattern, args.dry_run, skip_lines)
     else:
         logging.error("Unknown merge type.")
         sys.exit(1)
