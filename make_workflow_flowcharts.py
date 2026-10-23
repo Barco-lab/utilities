@@ -210,7 +210,7 @@ def rna(path):
           out="03_align/{sample}.bam"),
         N("gtf", 3, 3.3, "GTF 过滤", ["可选，默认不过滤", "如去除 miRNA / snoRNA / snRNA"], kind="opt"),
         N("dedup", 4, 1.5, "umi_tools dedup", ["仅 UMI 样本，之后使用 .dedup.bam"], kind="opt", span=1.3),
-        N("bw", 5, 0, "bigwig", ["deeptools bamCoverage", "CPM、bin 100；可分正负链"], out="07_bigwig/"),
+        N("bw", 5, 0, "bigwig", ["deeptools bamCoverage", "CPM、bin 10；可分正负链"], out="07_bigwig/"),
         N("strand", 5, 1.5, "链方向检查", ["featureCounts -s 1 / -s 2", "auto 时采用推断值"],
           out="strandedness.tsv"),
         N("fc", 6, 1.5, "featureCounts", ["exon：-t exon -g gene_id", "intron：未分给 exon 的 reads", "再按 -t gene 计数（exon 优先）"],
@@ -218,8 +218,8 @@ def rna(path):
         N("st", 6, 3.3, "StringTie", ["TPM / FPKM", "仅 full_length 样本"], kind="opt", out="stringtie_*.tsv"),
         N("rep", 6, 0, "repeat 计数", ["featureCounts", "RepeatMasker GTF（自备）"], kind="opt",
           out="repeats_counts.tsv"),
-        N("mqc", 7, 1.65, "summary.tsv + MultiQC", ["reads 数、比对率、UMI 重复率、assigned 率、intron 率、链方向；汇总所有 QC 结果"],
-          kind="report", span=4.3, out="tables/summary.tsv、qc/multiqc/multiqc_report.html"),
+        N("mqc", 7, 1.65, "QC 汇总 + report", ["reads 数、比对率、UMI 重复率、assigned 率、intron 率、链方向；汇总所有 QC 结果"],
+          kind="report", span=4.3, out="qc/summary.tsv、qc/report.html、qc/multiqc/"),
     ]
     e = [
         ("in", "umi", {}),
@@ -265,6 +265,7 @@ def peaks(path, atac):
         homer_sub = ["summit ± 100 bp", "仅 narrow、非 control 样本"]
         sumtxt = ["reads 数、比对率、重复率、peak 数、FRiP、TSS enrichment；汇总所有 QC 结果"]
         title, sub = "snakemake_bulk_chip", "ChIP-seq / CUT&Tag：fastq → bowtie2 → 过滤去重 → MACS3 → peak / bigwig"
+    mqc_title, mqc_out = "QC 汇总 + report", "qc/summary.tsv、qc/report.html、qc/multiqc/"
     nodes = [
         N("in", 0, 1.5, "FASTQ", inp, kind="input", span=1.4),
         N("fqc", 1, 0, "FastQC", ["raw / trimmed"], kind="qc"),
@@ -275,13 +276,12 @@ def peaks(path, atac):
         N("stats", 3, 0, "samtools stats", stats_sub, kind="qc"),
         N("flt", 3, 1.5, "过滤 + 去重", flt_sub, out="02_align/{sample}.dedup.bam", span=1.25),
         N("macs", 4, 1.5, "MACS3", macs_sub),
-        N("bw", 4, 3.2, "bigwig", ["deeptools bamCoverage", "CPM、bin 100、排除 blacklist"], out="04_bigwig/"),
+        N("bw", 4, 3.2, "bigwig", ["deeptools bamCoverage", "RPGC、bin 10、排除 blacklist"], out="04_bigwig/"),
         N("frip", 5, 0, "FRiP", ["peak 内 reads 比例"], kind="qc"),
         N("bl", 5, 1.5, "去除 blacklist", ["bedtools，ENCODE v2"], out="03_peaks/"),
-        N("tss", 5, 3.2, "TSS profile", ["TSS 来自 GTF", "TSS enrichment"], kind="qc"),
+        N("tss", 5, 3.2, "TSS profile", ["protein_coding 基因的 TSS", "TSS enrichment"], kind="qc"),
         N("homer", 6, 1.5, "HOMER motif", homer_sub, kind="opt", out="05_motif/"),
-        N("mqc", 7, 1.6, "summary.tsv + MultiQC", sumtxt, kind="report", span=4.2,
-          out="tables/summary.tsv、qc/multiqc/multiqc_report.html"),
+        N("mqc", 7, 1.6, mqc_title, sumtxt, kind="report", span=4.2, out=mqc_out),
     ]
     if not atac:
         nodes.append(N("fp", 4, 0, "fingerprint", ["deeptools", "IP 相对 input 的富集"], kind="qc"))
