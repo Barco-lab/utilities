@@ -285,6 +285,10 @@ def peaks(path, atac):
     ]
     if not atac:
         nodes.append(N("fp", 4, 0, "fingerprint", ["deeptools", "IP 相对 input 的富集"], kind="qc"))
+    else:
+        stages[6] = "motif /\n重复"
+        nodes.append(N("rep", 6, 0, "重复一致性", ["组内 peak 重现性（Jaccard）", "consensus peak 相关性 / PCA",
+                                                  "性别（chrY reads）；R 绘图"], kind="qc", out="qc/replicates/")),
     e = [
         ("in", "trim", {}),
         ("trim", "fqc", {"ports": "lr"}),
@@ -302,6 +306,8 @@ def peaks(path, atac):
     e = [(a, b, {k: v for k, v in o.items() if not (k == "label" and not v)}) for a, b, o in e]
     if not atac:
         e.append(("flt", "fp", {"ports": "bt", "aoff": -50}))
+    else:
+        e.append(("bl", "rep", {"ports": "bt", "aoff": -70}))
     render(title, sub, stages, nodes, e, 4.2, path)
 
 
