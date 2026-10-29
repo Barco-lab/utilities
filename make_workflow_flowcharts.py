@@ -1,11 +1,12 @@
 """
-生成 bulk RNA / ChIP / ATAC 流程 README 中的流程图（SVG + 2 倍 PNG）。
+生成 bulk RNA / ChIP / ATAC 流程 README 与 QC 报告中的流程图（SVG + 2 倍 PNG），中英文各一份：
+bulk_*_workflow.svg（中文，README.md）、bulk_*_workflow.en.svg（英文，README.en.md）；QC 报告两份都嵌入，随语言切换。
 
 用法：
     python make_workflow_flowcharts.py            # 写入 ../snakemake_bulk_*/docs/images/
     python make_workflow_flowcharts.py OUT_DIR    # 全部写入 OUT_DIR
 
-流程有改动时修改下面 rna() / peaks() 中的节点和连线后重新运行。PNG 需要 rsvg-convert。
+流程有改动时修改下面 rna() / peaks() 中的节点和连线后重新运行；文字用 Z(中文, 英文)。PNG 需要 rsvg-convert。
 """
 import os
 import shutil
@@ -25,6 +26,13 @@ STYLE = {  # fill, stroke, title color, dashed
     "report": ("#F1EAFB", "#6B46C1", "#4C2F94", False),
 }
 OUT_COLOR = "#C0501F"
+
+LANG = "zh"
+
+
+def Z(zh, en):
+    """按当前语言（LANG）取中文或英文；列表逐项对应。"""
+    return zh if LANG == "zh" else en
 
 GUTTER = 128      # stage label column
 COLW = 212        # column pitch
@@ -74,16 +82,18 @@ def render(title, subtitle, stages, nodes, edges, ncols, path):
     o.append(f'<text x="24" y="62" font-size="13" fill="#52606D">{escape(subtitle)}</text>')
 
     # legend (top right)
-    items = [("main", "主流程"), ("opt", "可选 / 条件步骤"), ("qc", "QC"), ("report", "汇总")]
+    items = [("main", Z("主流程", "Main step")), ("opt", Z("可选 / 条件步骤", "Optional / conditional")), ("qc", "QC"),
+             ("report", Z("汇总", "Summary"))]
+    star = Z("★ 交付结果", "★ Deliverable")
     ws = [28 + text_w(lab, 12.5) + 22 for _, lab in items]
-    x = width - 24 - sum(ws) - text_w("★ 交付结果", 12.5)
+    x = width - 24 - sum(ws) - text_w(star, 12.5)
     for (k, lab), w in zip(items, ws):
         f, s, _, d = STYLE[k]
         dash = ' stroke-dasharray="5 3"' if d else ""
         o.append(f'<rect x="{x:.1f}" y="30" width="22" height="14" rx="3" fill="{f}" stroke="{s}" stroke-width="1.5"{dash}/>')
         o.append(f'<text x="{x + 28:.1f}" y="42" font-size="12.5" fill="#323F4B">{lab}</text>')
         x += w
-    o.append(f'<text x="{x:.1f}" y="42" font-size="12.5" fill="{OUT_COLOR}" font-weight="700">★ 交付结果</text>')
+    o.append(f'<text x="{x:.1f}" y="42" font-size="12.5" fill="{OUT_COLOR}" font-weight="700">{star}</text>')
 
     # stage bands
     for r, name in enumerate(stages):
@@ -197,29 +207,44 @@ def node_svg(n):
 # =====================================================================
 def rna(path):
     N = Node
-    stages = ["输入", "UMI 预处理", "修剪", "比对", "UMI 去重", "链方向\n/ 信号", "定量", "汇总"]
+    stages = Z(["输入", "UMI 预处理", "修剪", "比对", "UMI 去重", "链方向\n/ 信号", "定量", "汇总"],
+               ["Input", "UMI\npre-processing", "Trimming", "Alignment", "UMI dedup", "Strand\n/ signal", "Counting", "Summary"])
     nodes = [
-        N("in", 0, 1.5, "FASTQ", ["samples.tsv：SE / PE、链方向、", "protocol、umi 可按样本设置"], kind="input", span=1.4),
-        N("umi", 1, 1.5, "umi_tools extract / 改写 read 名",
-          ["umi: read → 从序列提取 UMI", "umi: header（comment）→ UMI 移入 read 名"], kind="opt", span=1.5),
+        N("in", 0, 1.5, "FASTQ", Z(["samples.tsv：SE / PE、链方向、", "protocol、umi 可按样本设置"],
+                                   ["samples.tsv: SE / PE, strandedness,", "protocol and umi per sample"]), kind="input", span=1.4),
+        N("umi", 1, 1.5, Z("umi_tools extract / 改写 read 名", "umi_tools extract / read names"),
+          Z(["umi: read → 从序列提取 UMI", "umi: header（comment）→ UMI 移入 read 名"],
+            ["umi: read → UMI taken from the sequence", "umi: header (comment) → UMI into read name"]), kind="opt", span=1.5),
         N("fqc", 2, 0, "FastQC", ["raw / trimmed"], kind="qc"),
         N("trim", 2, 1.5, "Trim Galore", ["--quality 20 --length 30"]),
-        N("q3", 2, 3.3, "3' 端修剪", ["切除 read1 5' 端 N nt", "cutadapt 去 polyA"], kind="opt"),
-        N("refchk", 3, 0, "参考文件检查", ["index ↔ GTF 染色体命名", "启动时运行"], kind="qc"),
-        N("hisat2", 3, 1.5, "HISAT2", ["-t；链方向已知时加", "--rna-strandness", "samtools sort / index"],
+        N("q3", 2, 3.3, Z("3' 端修剪", "3' end trimming"), Z(["切除 read1 5' 端 N nt", "cutadapt 去 polyA"],
+                                                             ["clip N nt off the read1 5' end", "polyA removed by cutadapt"]), kind="opt"),
+        N("refchk", 3, 0, Z("参考文件检查", "Reference check"), Z(["index ↔ GTF 染色体命名", "启动时运行"],
+                                                              ["index ↔ GTF chrom names", "run at start-up"]), kind="qc"),
+        N("hisat2", 3, 1.5, "HISAT2", Z(["-t；链方向已知时加", "--rna-strandness", "samtools sort / index"],
+                                        ["-t; --rna-strandness when", "strandedness is known", "samtools sort / index"]),
           out="03_align/{sample}.bam"),
-        N("gtf", 3, 3.3, "GTF 过滤", ["可选，默认不过滤", "如去除 miRNA / snoRNA / snRNA"], kind="opt"),
-        N("dedup", 4, 1.5, "umi_tools dedup", ["仅 UMI 样本，之后使用 .dedup.bam"], kind="opt", span=1.3),
-        N("bw", 5, 0, "bigwig", ["deeptools bamCoverage", "CPM、bin 10；可分正负链"], out="07_bigwig/"),
-        N("strand", 5, 1.5, "链方向检查", ["featureCounts -s 1 / -s 2", "auto 时采用推断值"],
+        N("gtf", 3, 3.3, Z("GTF 过滤", "GTF filter"), Z(["可选，默认不过滤", "如去除 miRNA / snoRNA / snRNA"],
+                                                        ["optional, off by default", "e.g. drop miRNA / snoRNA"]), kind="opt"),
+        N("dedup", 4, 1.5, "umi_tools dedup", Z(["仅 UMI 样本，之后使用 .dedup.bam"], ["UMI samples only, then .dedup.bam"]),
+          kind="opt", span=1.3),
+        N("bw", 5, 0, "bigwig", Z(["deeptools bamCoverage", "CPM、bin 10；可分正负链"],
+                                  ["deeptools bamCoverage", "CPM, bin 10; optional per strand"]), out="07_bigwig/"),
+        N("strand", 5, 1.5, Z("链方向检查", "Strandedness check"), Z(["featureCounts -s 1 / -s 2", "auto 时采用推断值"],
+                                                                   ["featureCounts -s 1 / -s 2", "inferred value used for auto"]),
           out="strandedness.tsv"),
-        N("fc", 6, 1.5, "featureCounts", ["exon：-t exon -g gene_id", "intron：未分给 exon 的 reads", "再按 -t gene 计数（exon 优先）"],
-          out="*_exon.tsv、*_exon_intron.tsv", span=1.35),
-        N("st", 6, 3.3, "StringTie", ["TPM / FPKM", "仅 full_length 样本"], kind="opt", out="stringtie_*.tsv"),
-        N("rep", 6, 0, "repeat 计数", ["featureCounts", "RepeatMasker GTF（自备）"], kind="opt",
+        N("fc", 6, 1.5, "featureCounts", Z(["exon：-t exon -g gene_id", "intron：未分给 exon 的 reads", "再按 -t gene 计数（exon 优先）"],
+                                           ["exon: -t exon -g gene_id", "intron: reads not assigned to exons,", "counted with -t gene (exon first)"]),
+          out=Z("*_exon.tsv、*_exon_intron.tsv", "*_exon.tsv, *_exon_intron.tsv"), span=1.35),
+        N("st", 6, 3.3, "StringTie", Z(["TPM / FPKM", "仅 full_length 样本"], ["TPM / FPKM", "full_length samples only"]),
+          kind="opt", out="stringtie_*.tsv"),
+        N("rep", 6, 0, Z("repeat 计数", "Repeat counts"), Z(["featureCounts", "RepeatMasker GTF（自备）"],
+                                                           ["featureCounts", "RepeatMasker GTF (own)"]), kind="opt",
           out="repeats_counts.tsv"),
-        N("mqc", 7, 1.65, "QC 汇总 + report", ["reads 数、比对率、UMI 重复率、assigned 率、intron 率、链方向；汇总所有 QC 结果"],
-          kind="report", span=4.3, out="qc/summary.tsv、qc/report.html、qc/multiqc/"),
+        N("mqc", 7, 1.65, Z("QC 汇总 + report", "QC summary + report"),
+          Z(["reads 数、比对率、UMI 重复率、assigned 率、intron 率、链方向；汇总所有 QC 结果"],
+            ["reads, mapping rate, UMI duplicates, assigned and intron rates, strandedness; all QC collected"]),
+          kind="report", span=4.3, out=Z("qc/summary.tsv、qc/report.html、qc/multiqc/", "qc/summary.tsv, qc/report.html, qc/multiqc/")),
     ]
     e = [
         ("in", "umi", {}),
@@ -230,12 +255,13 @@ def rna(path):
         ("hisat2", "dedup", {}),
         ("dedup", "strand", {}),
         ("dedup", "bw", {"ports": "bt", "aoff": -50}),
-        ("gtf", "strand", {"ports": "br", "label": "genes.gtf（定量共用）"}),
+        ("gtf", "strand", {"ports": "br", "label": Z("genes.gtf（定量共用）", "genes.gtf (shared by counting)")}),
         ("strand", "fc", {"label": "-s 0 / 1 / 2"}),
         ("strand", "rep", {"ports": "bt", "aoff": -80, "dashed": True}),
         ("strand", "st", {"ports": "bt", "aoff": 80, "dashed": True}),
     ]
-    render("snakemake_bulk_rna", "bulk RNA-seq：fastq → 比对 → 链方向 → 基因定量 / bigwig",
+    render("snakemake_bulk_rna", Z("bulk RNA-seq：fastq → 比对 → 链方向 → 基因定量 / bigwig",
+                                   "bulk RNA-seq: fastq → alignment → strandedness → gene counts / bigwig"),
            stages, nodes, e, 4.3, path)
 
 
@@ -244,51 +270,73 @@ def rna(path):
 # =====================================================================
 def peaks(path, atac):
     N = Node
-    stages = ["输入", "修剪", "比对", "过滤去重", "call peak\n/ 信号", "后处理", "motif", "汇总"]
+    stages = Z(["输入", "修剪", "比对", "过滤去重", "call peak\n/ 信号", "后处理", "motif /\n重复", "汇总"],
+               ["Input", "Trimming", "Alignment", "Filter /\ndedup", "Peaks\n/ signal", "Post-\nprocessing", "Motif /\nreplicates", "Summary"])
+    bw_sub = Z(["deeptools bamCoverage，bin 10", "RPGC 等，可同时多种", "DESeq2 size factor（可选）"],
+               ["deeptools bamCoverage, bin 10", "RPGC etc., several at once", "DESeq2 size factors (optional)"])
     if atac:
-        inp = ["samples.tsv：sample、fq1、fq2", "SE / PE 自动识别"]
-        trim_sub = ["--nextera（Tn5 接头）"]
-        bt2_sub = ["--very-sensitive -X 2000", "PE：--no-mixed --no-discordant"]
-        flt_sub = ["MAPQ ≥ 30、properly paired", "去除 chrM", "samtools markdup -r"]
-        macs_sub = ["PE：-f BAMPE", "SE：--shift -100 --extsize 200", "narrowPeak，q < 0.01"]
-        stats_sub = ["片段长度 / 核小体周期", "chrM 比例、flagstat"]
+        inp = Z(["samples.tsv：sample、fq1、fq2", "SE / PE 自动识别"], ["samples.tsv: sample, fq1, fq2", "SE / PE detected"])
+        trim_sub = Z(["--nextera（Tn5 接头）"], ["--nextera (Tn5 adapters)"])
+        bt2_sub = ["--very-sensitive -X 2000", Z("PE：--no-mixed --no-discordant", "PE: --no-mixed --no-discordant")]
+        flt_sub = Z(["MAPQ ≥ 30、properly paired", "去除 chrM", "samtools markdup -r"],
+                    ["MAPQ ≥ 30, properly paired", "chrM removed", "samtools markdup -r"])
+        macs_sub = Z(["PE：-f BAMPE", "SE：--shift -100 --extsize 200", "narrowPeak，q < 0.01"],
+                     ["PE: -f BAMPE", "SE: --shift -100 --extsize 200", "narrowPeak, q < 0.01"])
+        stats_sub = Z(["片段长度 / 核小体周期", "chrM 比例、flagstat"], ["fragment length / nucleosomes", "chrM fraction, flagstat"])
         homer_sub = ["summit ± 100 bp"]
-        sumtxt = ["reads 数、比对率、chrM 比例、重复率、peak 数、FRiP、TSS enrichment；汇总所有 QC 结果"]
-        title, sub = "snakemake_bulk_atac", "bulk ATAC-seq：fastq → bowtie2 → 过滤去重 → MACS3 → peak / bigwig"
+        sumtxt = Z(["reads 数、比对率、chrM 比例、重复率、peak 数、FRiP、TSS enrichment、亚核小体比例；汇总所有 QC 结果"],
+                   ["reads, mapping rate, chrM, duplicates, peaks, FRiP, TSS enrichment, sub-nucleosomal share; all QC collected"])
+        title = "snakemake_bulk_atac"
+        sub = Z("bulk ATAC-seq：fastq → bowtie2 → 过滤去重 → MACS3 → peak / bigwig",
+                "bulk ATAC-seq: fastq → bowtie2 → filter / dedup → MACS3 → peaks / bigwig")
     else:
-        inp = ["samples.tsv：sample、fq1、fq2、", "control（input / IgG）、peak_type"]
-        trim_sub = ["自动识别接头"]
-        bt2_sub = ["-N 1", "PE：--no-mixed --no-discordant"]
-        flt_sub = ["MAPQ ≥ 30、properly paired", "chrM 可选去除", "samtools markdup -r"]
-        macs_sub = ["有对照：-c control", "无对照：--nolambda --nomodel", "narrow / broad；PE 用 BAMPE"]
-        stats_sub = ["片段长度、chrM 比例", "flagstat / idxstats"]
-        homer_sub = ["summit ± 100 bp", "仅 narrow、非 control 样本"]
-        sumtxt = ["reads 数、比对率、重复率、peak 数、FRiP、TSS enrichment；汇总所有 QC 结果"]
-        title, sub = "snakemake_bulk_chip", "ChIP-seq / CUT&Tag：fastq → bowtie2 → 过滤去重 → MACS3 → peak / bigwig"
-    mqc_title, mqc_out = "QC 汇总 + report", "qc/summary.tsv、qc/report.html、qc/multiqc/"
+        inp = Z(["samples.tsv：sample、fq1、fq2、", "control（input / IgG）、peak_type"],
+                ["samples.tsv: sample, fq1, fq2,", "control (input / IgG), peak_type"])
+        trim_sub = Z(["自动识别接头"], ["adapters auto-detected"])
+        bt2_sub = ["-N 1", Z("PE：--no-mixed --no-discordant", "PE: --no-mixed --no-discordant")]
+        flt_sub = Z(["MAPQ ≥ 30、properly paired", "chrM 可选去除", "samtools markdup -r"],
+                    ["MAPQ ≥ 30, properly paired", "chrM optionally removed", "samtools markdup -r"])
+        macs_sub = Z(["有对照：-c control", "无对照：--nolambda --nomodel", "narrow / broad；PE 用 BAMPE"],
+                     ["with control: -c control", "without: --nolambda --nomodel", "narrow / broad; BAMPE for PE"])
+        stats_sub = Z(["片段长度、chrM 比例", "flagstat / idxstats"], ["fragment length, chrM fraction", "flagstat / idxstats"])
+        homer_sub = Z(["summit ± 100 bp", "仅 narrow、非 control 样本"], ["summit ± 100 bp", "narrow, non-control samples"])
+        sumtxt = Z(["reads 数、比对率、重复率、peak 数、FRiP、TSS enrichment、亚核小体比例；汇总所有 QC 结果"],
+                   ["reads, mapping rate, duplicates, peaks, FRiP, TSS enrichment, sub-nucleosomal share; all QC collected"])
+        title = "snakemake_bulk_chip"
+        sub = Z("ChIP-seq / CUT&Tag：fastq → bowtie2 → 过滤去重 → MACS3 → peak / bigwig",
+                "ChIP-seq / CUT&Tag: fastq → bowtie2 → filter / dedup → MACS3 → peaks / bigwig")
+    mqc_title = Z("QC 汇总 + report", "QC summary + report")
+    mqc_out = Z("qc/summary.tsv、qc/report.html、qc/multiqc/", "qc/summary.tsv, qc/report.html, qc/multiqc/")
     nodes = [
         N("in", 0, 1.5, "FASTQ", inp, kind="input", span=1.4),
         N("fqc", 1, 0, "FastQC", ["raw / trimmed"], kind="qc"),
         N("trim", 1, 1.5, "Trim Galore", trim_sub),
-        N("refchk", 2, 0, "参考文件检查", ["index / blacklist 染色体命名", "GTF / fasta 自动转换命名"], kind="qc"),
+        N("refchk", 2, 0, Z("参考文件检查", "Reference check"),
+          Z(["index / blacklist 染色体命名", "GTF / fasta 自动转换命名"], ["index / blacklist chrom names", "GTF / fasta names converted"]),
+          kind="qc"),
         N("bt2", 2, 1.5, "Bowtie2", bt2_sub),
-        N("contam", 2, 3.2, "污染检查", ["比对到其它物种（如 hg38）", "只报告比对率"], kind="opt"),
+        N("contam", 2, 3.2, Z("污染检查", "Contamination"), Z(["比对到其它物种（如 hg38）", "只报告比对率"],
+                                                             ["aligned to another species", "(e.g. hg38); mapping rate only"]), kind="opt"),
         N("stats", 3, 0, "samtools stats", stats_sub, kind="qc"),
-        N("flt", 3, 1.5, "过滤 + 去重", flt_sub, out="02_align/{sample}.dedup.bam", span=1.25),
+        N("flt", 3, 1.5, Z("过滤 + 去重", "Filter + dedup"), flt_sub, out="02_align/{sample}.dedup.bam", span=1.25),
         N("macs", 4, 1.5, "MACS3", macs_sub),
-        N("bw", 4, 3.2, "bigwig", ["deeptools bamCoverage", "RPGC、bin 10、排除 blacklist"], out="04_bigwig/"),
-        N("frip", 5, 0, "FRiP", ["peak 内 reads 比例"], kind="qc"),
-        N("bl", 5, 1.5, "去除 blacklist", ["bedtools，ENCODE v2"], out="03_peaks/"),
-        N("tss", 5, 3.2, "TSS profile", ["protein_coding 基因的 TSS", "TSS enrichment"], kind="qc"),
+        N("bw", 4, 3.2, "bigwig", bw_sub, out="04_bigwig/"),
+        N("frip", 5, 0, "FRiP", Z(["peak 内 reads 比例"], ["fraction of reads in peaks"]), kind="qc"),
+        N("bl", 5, 1.5, Z("去除 blacklist", "Blacklist removal"), Z(["bedtools，ENCODE v2"], ["bedtools, ENCODE v2"]), out="03_peaks/"),
+        N("tss", 5, 3.2, Z("信号 profile", "Signal profiles"),
+          Z(["TSS enrichment、meta gene", "（protein_coding 基因）", "全基因组 bin：染色体 / 累积分布"],
+            ["TSS enrichment, meta gene", "(protein_coding genes)", "genome bins: tracks / cumulative"]), kind="qc"),
         N("homer", 6, 1.5, "HOMER motif", homer_sub, kind="opt", out="05_motif/"),
         N("mqc", 7, 1.6, mqc_title, sumtxt, kind="report", span=4.2, out=mqc_out),
     ]
     if not atac:
-        nodes.append(N("fp", 4, 0, "fingerprint", ["deeptools", "IP 相对 input 的富集"], kind="qc"))
-    else:
-        stages[6] = "motif /\n重复"
-        nodes.append(N("rep", 6, 0, "重复一致性", ["组内 peak 重现性（Jaccard）", "consensus peak 相关性 / PCA",
-                                                  "性别（chrY reads）；R 绘图"], kind="qc", out="qc/replicates/")),
+        nodes.append(N("fp", 4, 0, "fingerprint", Z(["deeptools", "IP 相对 input 的富集"], ["deeptools", "IP enrichment over input"]),
+                       kind="qc"))
+    rep_sub = Z(["peak 重现性（Jaccard、Venn）", "DiffBind consensus：相关性 / PCA", "性别（chrX / chrY 占比）；R 绘图"],
+                ["peak overlap (Jaccard, Venn)", "DiffBind: correlation / PCA", "sex (chrX / chrY); R plots"])
+    if not atac:
+        rep_sub = [Z("只比较 IP 样本", "IP samples only")] + rep_sub[:2] + [Z("性别（含对照）；R 绘图", "sex (controls included); R plots")]
+    nodes.append(N("rep", 6, 0, Z("重复一致性", "Replicate consistency"), rep_sub, kind="qc", out="qc/replicates/"))
     e = [
         ("in", "trim", {}),
         ("trim", "fqc", {"ports": "lr"}),
@@ -296,8 +344,8 @@ def peaks(path, atac):
         ("trim", "contam", {"ports": "rt", "dashed": True}),
         ("bt2", "flt", {}),
         ("flt", "stats", {"ports": "lr"}),
-        ("flt", "macs", {"label": "" if atac else "IP 样本（+ control BAM）"}),
-        ("flt", "bw", {"ports": "rt", "label": "所有样本" if not atac else ""}),
+        ("flt", "macs", {"label": "" if atac else Z("IP 样本（+ control BAM）", "IP samples (+ control BAM)")}),
+        ("flt", "bw", {"ports": "rt", "label": Z("所有样本", "all samples") if not atac else ""}),
         ("macs", "bl", {}),
         ("bl", "frip", {"ports": "lr"}),
         ("bw", "tss", {}),
@@ -306,8 +354,7 @@ def peaks(path, atac):
     e = [(a, b, {k: v for k, v in o.items() if not (k == "label" and not v)}) for a, b, o in e]
     if not atac:
         e.append(("flt", "fp", {"ports": "bt", "aoff": -50}))
-    else:
-        e.append(("bl", "rep", {"ports": "bt", "aoff": -70}))
+    e.append(("bl", "rep", {"ports": "bt", "aoff": -70}))
     render(title, sub, stages, nodes, e, 4.2, path)
 
 
@@ -324,7 +371,8 @@ if __name__ == "__main__":
     for name, fn in jobs:
         out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(here, "..", f"snakemake_bulk_{name}", "docs", "images")
         os.makedirs(out, exist_ok=True)
-        svg = os.path.join(out, f"bulk_{name}_workflow.svg")
-        fn(svg)
-        to_png(svg)
-        print(os.path.normpath(svg))
+        for LANG, suffix in (("zh", ""), ("en", ".en")):
+            svg = os.path.join(out, f"bulk_{name}_workflow{suffix}.svg")
+            fn(svg)
+            to_png(svg)
+            print(os.path.normpath(svg))
