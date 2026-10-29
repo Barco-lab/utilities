@@ -324,8 +324,8 @@ def peaks(path, atac):
         N("frip", 5, 0, "FRiP", Z(["peak 内 reads 比例"], ["fraction of reads in peaks"]), kind="qc"),
         N("bl", 5, 1.5, Z("去除 blacklist", "Blacklist removal"), Z(["bedtools，ENCODE v2"], ["bedtools, ENCODE v2"]), out="03_peaks/"),
         N("tss", 5, 3.2, Z("信号 profile", "Signal profiles"),
-          Z(["TSS enrichment、meta gene", "（protein_coding 基因）", "全基因组 bin：染色体 / 累积分布"],
-            ["TSS enrichment, meta gene", "(protein_coding genes)", "genome bins: tracks / cumulative"]), kind="qc"),
+          Z(["TSS enrichment、meta gene", "（protein_coding 基因）", "全基因组 bin：染色体 / 密度分布"],
+            ["TSS enrichment, meta gene", "(protein_coding genes)", "genome bins: tracks / density"]), kind="qc"),
         N("homer", 6, 1.5, "HOMER motif", homer_sub, kind="opt", out="05_motif/"),
         N("mqc", 7, 1.6, mqc_title, sumtxt, kind="report", span=4.2, out=mqc_out),
     ]
